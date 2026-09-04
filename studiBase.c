@@ -1,247 +1,512 @@
+#include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #define DEFAULT_FILE "StudentRecords.txt"
+#define MAX_NAME 50
+#define MAX_FILE_NAME 100
+#define INPUT_SIZE 256
+#define MIN_GPA 0.0f
+#define MAX_GPA 9.0f
 
-FILE *rec;
-char recName[100];
-char input[100];
-int choice;
-int count;
-
+char recName[MAX_FILE_NAME];
+char input[INPUT_SIZE];
 
 struct Students{
-    char name[50];
+    char name[MAX_NAME];
     int id;
     float gpa;
 };
 
-int mainMenu();
-char openRecord(struct Students **student);
-void viewAll(struct Students *student, int count);
-void addStudent(struct Students **student, int count);
-void viewByID(int id);
-int fullExit();
-int afterFxnExit(struct Students *student);
+void logo(void);
+void openRecord(void);
+void mainMenu(void);
+void viewAll(void);
+void viewByID(void);
+void addStudent(void);
+void removeStudent(void);
+void fullExit(void);
+int afterFxnExit(void);
+
+int readLine(const char *message, char *value, size_t valueSize);
+int readInt(const char *message, int min, int max);
+float readGpa(const char *message);
+int loadStudents(struct Students **student);
+int saveStudents(struct Students *student, int count);
 
 
-
-
-
-
-void logo(){
-printf("\n __  ___       __     __        __   ___\n");
-printf("/__`  |  |  | |  \\ | |__)  /\\  /__` |__ \n");
-printf(".__/  |  \\__/ |__/ | |__) /~~\\ .__/ |___\n");
-printf("                               Nadeen H\n");                                        
+void logo(void){
+    printf("\n __  ___       __     __        __   ___\n");
+    printf("/__`  |  |  | |  \\ | |__)  /\\  /__` |__ \n");
+    printf(".__/  |  \\__/ |__/ | |__) /~~\\ .__/ |___\n");
+    printf("                               Nadeen H\n");
 }
 
-char openRecord(struct Students **student){
 
-    printf("\nWould you like to access student record StudentRecords.txt (press 1) or another student record (press 2)?\n");
-    scanf("%d", &choice);
+int readLine(const char *message, char *value, size_t valueSize){
+    int nextChar;
+    char *lineEnd;
 
-    while(choice<1 || choice>2){
-        printf("Invalid number entered, please try again: ");
-        scanf("%d", &choice);
+    printf("%s", message);
+
+    if(fgets(value, (int)valueSize, stdin) == NULL){
+        return 0;
     }
-    if(choice==1 || choice==2){
-        if(choice==1){
+
+    lineEnd = strchr(value, '\n');
+
+    if(lineEnd){
+        *lineEnd = '\0';
+    }
+    else{
+        while((nextChar = getchar()) != '\n' && nextChar != EOF){
+        }
+
+        printf("Input was too long, please try again.\n");
+        return -1;
+    }
+
+    return 1;
+}
+
+
+int readInt(const char *message, int min, int max){
+    char numberInput[INPUT_SIZE];
+    char *end;
+    long number;
+
+    while(1){
+        int inputStatus = readLine(message, numberInput, sizeof(numberInput));
+
+        if(inputStatus == 0){
+            fullExit();
+            exit(EXIT_SUCCESS);
+        }
+
+        if(inputStatus == -1){
+            continue;
+        }
+
+        errno = 0;
+        number = strtol(numberInput, &end, 10);
+
+        while(isspace((unsigned char)*end)){
+            end++;
+        }
+
+        if(end != numberInput && *end == '\0' && errno != ERANGE && number >= min && number <= max){
+            return (int)number;
+        }
+
+        printf("Invalid number entered, please try again.\n");
+    }
+}
+
+
+float readGpa(const char *message){
+    char numberInput[INPUT_SIZE];
+    char *end;
+    float gpa;
+
+    while(1){
+        int inputStatus = readLine(message, numberInput, sizeof(numberInput));
+
+        if(inputStatus == 0){
+            fullExit();
+            exit(EXIT_SUCCESS);
+        }
+
+        if(inputStatus == -1){
+            continue;
+        }
+
+        errno = 0;
+        gpa = strtof(numberInput, &end);
+
+        while(isspace((unsigned char)*end)){
+            end++;
+        }
+
+        if(end != numberInput && *end == '\0' && errno != ERANGE && gpa >= MIN_GPA && gpa <= MAX_GPA){
+            return gpa;
+        }
+
+        printf("Please enter a GPA from %.2f to %.2f.\n", MIN_GPA, MAX_GPA);
+    }
+}
+
+
+void openRecord(void){
+    int recordChoice;
+    FILE *rec;
+
+    while(1){
+        recordChoice = readInt(
+            "\nWould you like to access student record StudentRecords.txt (press 1) or another student record (press 2)?\n",
+            1,
+            2
+        );
+
+        if(recordChoice == 1){
             strcpy(recName, DEFAULT_FILE);
         }
-        else if(choice == 2){
-            printf("\nPlease type record name: ");
-            scanf("%99s", recName);
-            if (access(recName, F_OK) != 0) {
-                printf("Record '%s' doesn't exist, creating it right now!\n", recName);
+        else{
+            while(1){
+                int inputStatus = readLine("\nPlease type record name: ", recName, sizeof(recName));
+
+                if(inputStatus == 0){
+                    fullExit();
+                    exit(EXIT_SUCCESS);
+                }
+
+                if(inputStatus == 1 && recName[0] != '\0'){
+                    break;
+                }
+
+                if(inputStatus == 1){
+                    printf("Record name cannot be empty.\n");
+                }
             }
         }
-    }
-    mainMenu(student);
-    return *recName;
-}
 
+        rec = fopen(recName, "a");
 
+        if(rec){
+            fclose(rec);
+            printf("Record '%s' is ready.\n", recName);
+            return;
+        }
 
-int mainMenu(struct Students **student){
-    struct Students *student = NULL;
-    int id;
-    rec = fopen(recName, "a+");
-    if (!rec) {
         perror("Couldn't open that file");
-        exit(EXIT_FAILURE);
+        printf("Please choose another record.\n");
     }
-    printf("\nChoose from the following:\n1- View all\n2- Search by ID\n3- Add new student to '%s' record\n4- Remove student from '%s' record\n5- Exit\n", recName, recName);
-    scanf("%d", &choice);
-
-    while(choice < 1 || choice > 5) {
-        printf("Invalid number entered, please try again: ");
-        scanf("%d", &choice);    
-    }
-
-    if(choice==1) viewAll(*student, count);
-    if(choice==2) viewByID(id);
-    if(choice==3) addStudent(&student, count);
-    if(choice==5) fullExit(student);
-
-    return 0;
-
 }
 
-void viewAll(struct Students *student, int count){
 
-    rewind(rec);
-    
-    while (fgets(input, sizeof(input), rec)==NULL){
-        int recNullChoice;
-        printf("\nNo students registered yet in %s.\nPlease choose from the following:\n1- Add students\n2- mainMenu\n3- Open another record\n4- Exit\n", recName);
-        scanf("%d", &recNullChoice);
-        fclose(rec);
+int loadStudents(struct Students **student){
+    FILE *rec = fopen(recName, "r");
+    int count = 0;
+    int lineNumber = 0;
 
-        if(recNullChoice == 1) addStudent(&student, count);
-        if(recNullChoice == 2) mainMenu(student);
-        if(recNullChoice == 3) openRecord(student);
-        if(recNullChoice==4) fullExit(student);
+    *student = NULL;
+
+    if(!rec){
+        perror("Couldn't open that file");
+        return -1;
     }
-    
-    rewind(rec);
-    count = 0; 
 
-    while(fgets(input, sizeof(input), rec)!=NULL){
+    while(fgets(input, sizeof(input), rec)){
+        struct Students currentStudent;
+        struct Students *studentTemp;
+        char extra;
+
+        lineNumber++;
+
+        if(sscanf(input, " %49[^,],%d,%f %c", currentStudent.name, &currentStudent.id, &currentStudent.gpa, &extra) != 3 ||
+           currentStudent.id < 1 || currentStudent.gpa < MIN_GPA || currentStudent.gpa > MAX_GPA){
+            printf("Skipping invalid record on line %d.\n", lineNumber);
+            continue;
+        }
+
+        studentTemp = realloc(*student, (size_t)(count + 1) * sizeof(struct Students));
+
+        if(!studentTemp){
+            printf("Memory allocation failed while loading records.\n");
+            free(*student);
+            *student = NULL;
+            fclose(rec);
+            return -1;
+        }
+
+        *student = studentTemp;
+        (*student)[count] = currentStudent;
         count++;
     }
-    rewind(rec);
 
-    student = malloc(count * (sizeof(struct Students)));
-
-    if (!student) {
-        printf("Memory allocation failed!\n");
+    if(ferror(rec)){
+        perror("Couldn't read that file");
+        free(*student);
+        *student = NULL;
         fclose(rec);
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
-    count = 0;
-    while (fgets(input, sizeof(input), rec)) {
-        sscanf(input," %49[^,],%d,%f", student[count].name, &student[count].id, &student[count].gpa);
-        count++;
-    }
-    
-    printf("\n");
-    for(int i = 0; i<count; i++){
-        printf("%d-\n    Name: %s\n    ID: %d\n    GPA: %f\n",i+1, student[i].name, student[i].id, student[i].gpa);
-    }
-
-    afterFxnExit(student);
-
+    fclose(rec);
+    return count;
 }
 
-void viewByID(int id){
-    rewind(rec);
-    struct Students *student;
-    int found = 0;
-    if(rec==NULL) viewAll(student, count);
-    count = 0;
-    int choice2;
-    student = NULL;
 
-    while(fgets(input, sizeof(input), rec)!=NULL){
-        student = realloc(student, (count+1) * sizeof(struct Students));
-        sscanf(input, "%49[^,],%d,%f", student[count].name, &student[count].id, &student[count].gpa);
-        count++;
+int saveStudents(struct Students *student, int count){
+    FILE *rec = fopen(recName, "w");
+
+    if(!rec){
+        perror("Couldn't update that file");
+        return 0;
     }
 
-    printf("\nPlease enter student's id: ");
-    scanf("%d",&id);
+    for(int i = 0; i < count; i++){
+        if(fprintf(rec, "%s,%d,%.2f\n", student[i].name, student[i].id, student[i].gpa) < 0){
+            perror("Couldn't write to that file");
+            fclose(rec);
+            return 0;
+        }
+    }
 
-    for(int i = 0; i<count; i++){
+    if(fclose(rec) != 0){
+        perror("Couldn't finish updating that file");
+        return 0;
+    }
+
+    return 1;
+}
+
+
+void viewAll(void){
+    struct Students *student = NULL;
+    int count = loadStudents(&student);
+
+    if(count < 0){
+        return;
+    }
+
+    if(count == 0){
+        printf("\nNo students registered yet in %s.\n", recName);
+        return;
+    }
+
+    printf("\nAll students in %s:\n", recName);
+
+    for(int i = 0; i < count; i++){
+        printf("%d-\n    Name: %s\n    ID: %d\n    GPA: %.2f\n", i + 1, student[i].name, student[i].id, student[i].gpa);
+    }
+
+    free(student);
+}
+
+
+void viewByID(void){
+    struct Students *student = NULL;
+    int count = loadStudents(&student);
+    int id;
+
+    if(count < 0){
+        return;
+    }
+
+    if(count == 0){
+        printf("\nNo students registered yet in %s.\n", recName);
+        return;
+    }
+
+    id = readInt("\nPlease enter student's ID: ", 1, INT_MAX);
+
+    for(int i = 0; i < count; i++){
         if(student[i].id == id){
-            printf("\nStudent found:\nName: %s\nID: %d\nGPA: %f\n", student[i].name, student[i].id, student[i].gpa);
-            found = 1;
+            printf("\nStudent found:\nName: %s\nID: %d\nGPA: %.2f\n", student[i].name, student[i].id, student[i].gpa);
+            free(student);
+            return;
+        }
+    }
+
+    printf("Student with ID '%d' is not in the record.\n", id);
+    free(student);
+}
+
+
+void addStudent(void){
+    struct Students *student = NULL;
+    char name[MAX_NAME];
+    char idMessage[INPUT_SIZE];
+    char gpaMessage[INPUT_SIZE];
+    int count = loadStudents(&student);
+    int id;
+    float gpa;
+    FILE *rec;
+
+    if(count < 0){
+        return;
+    }
+
+    while(1){
+        int inputStatus = readLine("Please enter student name: ", name, sizeof(name));
+
+        if(inputStatus == 0){
+            free(student);
+            fullExit();
+            exit(EXIT_SUCCESS);
+        }
+
+        if(inputStatus == -1){
+            continue;
+        }
+
+        if(name[0] == '\0'){
+            printf("Student name cannot be empty.\n");
+        }
+        else if(strchr(name, ',')){
+            printf("Student name cannot contain a comma.\n");
+        }
+        else{
             break;
         }
     }
 
-    if(!found){
-        printf("Student with id '%d' is not in the record.\n", id);
+    snprintf(idMessage, sizeof(idMessage), "Please enter %s's ID: ", name);
+
+    while(1){
+        int idExists = 0;
+        id = readInt(idMessage, 1, INT_MAX);
+
+        for(int i = 0; i < count; i++){
+            if(student[i].id == id){
+                idExists = 1;
+                break;
+            }
+        }
+
+        if(!idExists){
+            break;
+        }
+
+        printf("Student ID %d already exists in this record.\n", id);
     }
 
-    afterFxnExit(student);
+    snprintf(gpaMessage, sizeof(gpaMessage), "Please enter %s (%d) GPA: ", name, id);
+    gpa = readGpa(gpaMessage);
 
-}
+    rec = fopen(recName, "a");
 
-void addStudent(struct Students **student, int count){
     if(!rec){
-        rec = fopen(recName, "a+");
+        perror("Couldn't open that file");
+        free(student);
+        return;
     }
-    char name[50];
-    int id;
-    float gpa;
-    int choice3;
 
-    printf("Please enter student name: ");
-    scanf(" %[^\n]", name);
-    printf("Please enter %s's id: ", name);
-    scanf("%d", &id);
-    printf("Please enter %s (%d) gpa: ", name, id);
-    scanf("%f", &gpa);
-
-    //*student = malloc(count * sizeof(struct Students));
-    
-    fprintf(rec, "%s,%d,%.2f\n", name, id, gpa);
-    fflush(rec);
-    rewind(rec);
-    count = 0;
-
-    while(fgets(input, sizeof(input), rec)!=NULL){
-        count++;
+    if(fprintf(rec, "%s,%d,%.2f\n", name, id, gpa) < 0){
+        perror("Couldn't add student to that file");
+        fclose(rec);
+        free(student);
+        return;
     }
-    rewind(rec);
 
-    *student = malloc(count * sizeof(struct Students));
-    if(!*student){
-        printf("Memory allocation failed (addStudentFxn).\n");
+    if(fclose(rec) != 0){
+        perror("Couldn't finish adding student to that file");
+        free(student);
+        return;
     }
-    int i = 0;
-    while(fgets(input, sizeof(input), rec)!= NULL){
-        sscanf(input, "%49[^,],%d,%f", (*student)[count].name, &(*student)[count].id, &(*student)[count].gpa);
-        i++;
-    }
-    fflush(rec);    
-    printf("Student Successfully Added to %s:\nName: %s, ID: %d, gpa: %f\n", recName, name, id, gpa);  
-    
-    afterFxnExit(*student);
 
-}
-
-
-
-int afterFxnExit(struct Students *student){
-    int choice;
-    printf("\nPlease choose from the following:\n1- mainMenu\n2- Exit\n");
-    scanf("%d", &choice);
-    if(choice==1) mainMenu(student);
-    else if(choice==2) fullExit(student);
-    
-}
-
-int fullExit(struct Students *student){
-   
-    printf("\nExiting...");
-    if(rec) fclose(rec);
-    //if(student) free(student);
-    return 0;
-}
-
-int main(){
-
-    struct Students *student = NULL;
-    logo();
-    openRecord(student);
+    printf("\nStudent successfully added to %s:\nName: %s\nID: %d\nGPA: %.2f\n", recName, name, id, gpa);
     free(student);
-
-    return 0;
 }
 
 
+void removeStudent(void){
+    struct Students *student = NULL;
+    int count = loadStudents(&student);
+    int id;
+    int studentIndex = -1;
+
+    if(count < 0){
+        return;
+    }
+
+    if(count == 0){
+        printf("\nNo students registered yet in %s.\n", recName);
+        return;
+    }
+
+    id = readInt("\nEnter student ID to remove: ", 1, INT_MAX);
+
+    for(int i = 0; i < count; i++){
+        if(student[i].id == id){
+            studentIndex = i;
+            break;
+        }
+    }
+
+    if(studentIndex == -1){
+        printf("Student with ID '%d' is not in the record.\n", id);
+        free(student);
+        return;
+    }
+
+    printf("\nConfirm removal of:\nName: %s\nID: %d\nGPA: %.2f\n", student[studentIndex].name, student[studentIndex].id, student[studentIndex].gpa);
+
+    if(readInt("1- Yes\n2- No\n", 1, 2) == 2){
+        printf("Student was not removed.\n");
+        free(student);
+        return;
+    }
+
+    for(int i = studentIndex; i < count - 1; i++){
+        student[i] = student[i + 1];
+    }
+
+    count--;
+
+    if(saveStudents(student, count)){
+        printf("Student successfully removed from %s!\n", recName);
+    }
+
+    free(student);
+}
+
+
+int afterFxnExit(void){
+    return readInt("\nPlease choose from the following:\n1- Main menu\n2- Exit\n", 1, 2);
+}
+
+
+void fullExit(void){
+    printf("\nExiting...\n");
+}
+
+
+void mainMenu(void){
+    while(1){
+        int choice = readInt(
+            "\nChoose from the following:\n"
+            "1- View all\n"
+            "2- Search by ID\n"
+            "3- Add new student\n"
+            "4- Remove student\n"
+            "5- Exit\n",
+            1,
+            5
+        );
+
+        if(choice == 1){
+            viewAll();
+        }
+        else if(choice == 2){
+            viewByID();
+        }
+        else if(choice == 3){
+            addStudent();
+        }
+        else if(choice == 4){
+            removeStudent();
+        }
+        else{
+            fullExit();
+            return;
+        }
+
+        if(afterFxnExit() == 2){
+            fullExit();
+            return;
+        }
+    }
+}
+
+
+int main(void){
+    logo();
+    openRecord();
+    mainMenu();
+
+    return 0;
+}

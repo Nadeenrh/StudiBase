@@ -1,0 +1,9 @@
+# Compiled files
+studibase
+studibase.exe
+*.o
+*.out
+
+# Records created while running StudiBase
+StudentRecords.txt
+*.tmp
