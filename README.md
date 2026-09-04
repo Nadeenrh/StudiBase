@@ -1,4 +1,16 @@
-# StudiBase
+<div align="center">
+
+<pre>
+  __  ___       __     __        __   ___
+/__`  |  |  | |  \ | |__)  /\  /__` |__
+ .__/  |  \__/ |__/ | |__) /~~\ .__/ |___
+                                 Nadeen H
+</pre>
+
+<p><strong>A terminal-based student record manager written in C</strong></p>
+
+</div>
+
 
 StudiBase is a terminal-based student record manager written in C. It stores student names, IDs, and GPAs in plain-text files and lets the user view, search, add, and remove records through an interactive menu.
 
